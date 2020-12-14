@@ -7,6 +7,7 @@ directory that is named after the time stamp of the satellite image. The script
 also keeps a list of the downloaded files that have already been untarred to
 avoid duplicate work.
 
+The code is adapted from Open Climate Fix.
 '''
 import tarfile
 import re
