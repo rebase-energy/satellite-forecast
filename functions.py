@@ -1,3 +1,11 @@
+'''
+Author: Dennis van der Meer
+Email: denniswillemvandermeer@gmail.com
+
+This script contains all the necessary functions to compute, forecast and plot
+the global horizontal irradiance (GHI) at 14 SMHI locations spread across Sweden.
+
+'''
 import pandas as pd
 import time
 import pvlib
@@ -31,6 +39,7 @@ UNTARRED_DATA_PATH = r"D:\EUMETSAT\untarred"
 RESULTS_PATH = r"C:\Users\denva787\Documents\dennis\Greenlytics\Results"
 DATA_PATH = r"C:\Users\denva787\Documents\dennis\Greenlytics\Data" # For ghi measurements
 FORECAST_PATH = r"D:\EUMETSAT\forecasts" # Where forecasts are stored
+FORECAST_PATH_PS = r"D:\EUMETSAT\forecasts_ps" # Where persistence forecasts are stored
 # Load GHI data:
 ghi_m = pd.read_csv(os.path.join(DATA_PATH,"smhi_GHI.txt"), sep="\t", parse_dates=[0], index_col=0) # measured ghi
 
@@ -181,6 +190,62 @@ def fc_ghi(issuetime,latitudes,longitudes,wndw,K):
         fname = os.path.join(FORECAST_PATH, issuetime.strftime("%Y%m%dT%H%M")+".txt")
         fc.to_csv(fname, sep="\t")
 
+def fc_ghi_ps(issuetime,latitudes,longitudes,wndw,K):
+    '''
+    GHI persistence forecasts starting at a certain issue time for certain combinations
+    of latitudes and longitudes. The function computes the clear sky index at the
+    forecast issue time and the clear sky irradiance at the forecast valid time.
+    The GHI is then combined with the measured GHI, which finally
+    results in a data frame with K rows and columns: Az_loc, Elev_loc,
+    G_loc, G_ps_loc.
+    Arguments:
+    - issuetime: pandas datetime Timestamp.
+    - lats and lons: dictionaries containing the coordinates of sites in
+      the coordinate reference system WGS84 (standard coordinate system).
+    - wndw:
+    - K: vector of integers representing the forecast horizons (1,...,K).
+    Output:
+    - Data frame with K rows and columns: Az_loc, Elev_loc, G_loc, G_ps_loc.
+    '''
+    checked_date = define_trailing_and_target(issuetime,wndw)
+    if checked_date is None: # Check whether azimuth is lower than 85, skips if not.
+        return
+    else:
+        lst_of_dfs_outer = []
+        #issuetime = pd.date_range(start=issuetime, freq='15min', periods=1, tz='UTC').round('15min')
+        for k in K:
+            # Forecast valid time:
+            valid_time = issuetime + pd.Timedelta(15*k, unit='min')
+            valid_time_as_rng = pd.date_range(start=valid_time, freq='15min', periods=1, tz='UTC').round('15min')
+            # Time interval of the image:
+            time_int = pd.date_range(end=valid_time, freq='1min', periods=15, tz='UTC')#.round('15min')
+            # Convert issue time to range for get_clearsky
+            issuetime_as_rng = pd.date_range(start=issuetime, freq='15min', periods=1, tz='UTC').round('15min')
+
+            lst_of_dfs_inner = []
+            for loc in latitudes.keys(): # Loop over the locations
+                lat,lon=latitudes[loc],longitudes[loc]
+                current_loc = Location(lat,lon,'UTC',0)
+                # Read the station specific columns:
+                ghi_m_loc = ghi_m.filter(regex=(loc))
+                # Get the clear sky irradiance at valid time to compute GHI_ps:
+                clearsky_valid = current_loc.get_clearsky(time_int).resample('15min',closed='right',label='right').mean()
+                clearsky_valid = clearsky_valid.loc[valid_time_as_rng] # DataFrame with one row, take ghi
+                # Get the clear sky irradiance at issue time to compute persistence:
+                clearsky_issue = current_loc.get_clearsky(issuetime_as_rng)
+                # Get the measured data at the issue time
+                ghi_m_loc_issue =  ghi_m_loc.loc[issuetime_as_rng]
+                # Compute persistence forecast:
+                ghi_ps_fc = ghi_m_loc_issue['G_{}'.format(loc)].values/clearsky_issue['ghi'].values*clearsky_valid['ghi'].values
+                ghi_loc =  ghi_m_loc.loc[valid_time_as_rng]
+                ghi_loc['G_ps_{}'.format(loc)] = ghi_ps_fc
+                lst_of_dfs_inner.append(ghi_loc)
+            df = pd.concat(lst_of_dfs_inner,axis=1) # DF with 1 row and column for each location
+            lst_of_dfs_outer.append(df)
+        fc = pd.concat(lst_of_dfs_outer,axis=0).round(2) # DF with K rows and column for each location
+        fname = os.path.join(FORECAST_PATH_PS, issuetime.strftime("%Y%m%dT%H%M")+".txt")
+        fc.to_csv(fname, sep="\t")
+
 ########################################################################################
 ################################ Compute GHI functions #################################
 ########################################################################################
@@ -213,13 +278,15 @@ def calc_historical_rho(datetime,wndw):
                 # Load the HRV channel:
                 global_scene.load(['HRV'])
                 # Resample:
-                local_scene = global_scene.resample("scan1",radius_of_influence=50e3,resampler='nearest',neighbours=16) # nearest='bilinear',cache_dir=REFLECTANCE_DATA_PATH
+                #local_scene = global_scene.resample("scan1",radius_of_influence=50e3,resampler='nearest',neighbours=16) # nearest='bilinear',cache_dir=REFLECTANCE_DATA_PATH
                 # radius_of_influence: maximum distance to search for a neighbour for each point in the target grid
-                hrv = local_scene['HRV'] # xarray.DataArray
-                # Add time dimension and coordinate so I can easily slice the resulting xArray:
-                hrv = hrv.assign_coords(time=hrv.attrs['end_time'])
-                hrv = hrv.expand_dims('time')
-                sat_imgs.append(hrv)
+                #hrv = local_scene['HRV'] # xarray.DataArray
+                hrv = global_scene['HRV'] # xarray.DataArray
+                if hrv.values.shape == (1587, 3840): # Check only for the original HRV images! Some original HRV images are of different size so check this:
+                    # Add time dimension and coordinate so I can easily slice the resulting xArray:
+                    hrv = hrv.assign_coords(time=hrv.attrs['end_time'])
+                    hrv = hrv.expand_dims('time')
+                    sat_imgs.append(hrv)
         # Concatenate the list above on the 'time' dimension
         combined = xr.concat(sat_imgs, dim='time')
         # Extract the reflectances (this takes a while)
@@ -252,11 +319,12 @@ def calc_instant_rho(datetime,wndw):
             # Load the HRV channel:
             global_scene.load(['HRV'])
             # Resample:
-            local_scene = global_scene.resample("scan1",radius_of_influence=50e3,resampler='nearest',neighbours=16) # nearest='bilinear',cache_dir=REFLECTANCE_DATA_PATH
-            #local_scene.show('HRV') # If I want to produce a picture
+            #local_scene = global_scene.resample("scan1",radius_of_influence=50e3,resampler='nearest',neighbours=16) # nearest='bilinear',cache_dir=REFLECTANCE_DATA_PATH
             # radius_of_influence: maximum distance to search for a neighbour for each point in the target grid
-            hrv = local_scene['HRV'] # xarray.DataArray
-            return(hrv.values)
+            #hrv = local_scene['HRV'] # xarray.DataArray
+            hrv = global_scene['HRV'] # xarray.DataArray
+            if hrv.values.shape == (1587, 3840): # Check only for the original HRV images! Some original HRV images are of different size so check this:
+                return(hrv.values)
 
 def calc_cloudIndex(datetime,wndw):
     '''
@@ -272,8 +340,13 @@ def calc_cloudIndex(datetime,wndw):
         return
     else:
         rho_ground, rho_cloud = calc_historical_rho(datetime,wndw)
-        cloudIndex = (rho_instant - rho_ground) / (rho_cloud - rho_ground)
-        return(cloudIndex)
+        # Check to see if these arrays are equal in size, sometimes they are not (unsure why)
+        if rho_instant.shape == rho_cloud.shape and rho_instant.shape == rho_ground.shape:
+            cloudIndex = (rho_instant - rho_ground) / (rho_cloud - rho_ground)
+            return(cloudIndex)
+        else:
+            "Shape of 'rho_instant' = {}, shape of 'rho_cloud' = {}, shape of 'rho_ground' = {},".format(rho_instant.shape, rho_cloud.shape, rho_ground.shape)
+            return
 
 def calc_clearskyIndex(datetime,wndw):
     '''
@@ -371,7 +444,7 @@ def define_trailing_and_target(datetime,wndw):
     If the zenith angle is lower than 85 degrees, the date is in-
     cluded.
     Arguments:
-    - datetime: pandas datetime Timestap.
+    - datetime: pandas datetime Timestamp.
     - wndw: scalar with the training window length (for validation purposes)
     Output:
     - A dictionary with keys tr_window and targets. tr_window contains a list of
@@ -493,10 +566,12 @@ def get_coordinates(datetime,wndw):
         # Load the HRV channel:
         global_scene.load(['HRV'])
         # Resample:
-        local_scene = global_scene.resample("scan1",radius_of_influence=50e3,resampler='nearest',neighbours=16) # nearest='bilinear',cache_dir=REFLECTANCE_DATA_PATH
-        hrv = local_scene['HRV'] # Extract reflectance values into xarray.DataArray
+        #local_scene = global_scene.resample("scan1",radius_of_influence=50e3,resampler='nearest',neighbours=16) # nearest='bilinear',cache_dir=REFLECTANCE_DATA_PATH
+        #hrv = local_scene['HRV'] # Extract reflectance values into xarray.DataArray
+        hrv = global_scene['HRV'] # Extract reflectance values into xarray.DataArray
         # radius_of_influence: maximum distance to search for a neighbour for each point in the target grid
-        crs = local_scene['HRV'].attrs['area'].to_cartopy_crs()
+        #crs = local_scene['HRV'].attrs['area'].to_cartopy_crs()
+        crs = global_scene['HRV'].attrs['area'].to_cartopy_crs()
         return(crs)
 
 def get_projection(datetime):
@@ -524,8 +599,9 @@ def get_projection(datetime):
         # Load the HRV channel:
         global_scene.load(['HRV'])
         # Resample:
-        local_scene = global_scene.resample("scan1",radius_of_influence=50e3,resampler='nearest',neighbours=16) # nearest='bilinear',cache_dir=REFLECTANCE_DATA_PATH
-        hrv = local_scene['HRV'] # Extract reflectance values into xarray.DataArray
+        #local_scene = global_scene.resample("scan1",radius_of_influence=50e3,resampler='nearest',neighbours=16) # nearest='bilinear',cache_dir=REFLECTANCE_DATA_PATH
+        #hrv = local_scene['HRV'] # Extract reflectance values into xarray.DataArray
+        hrv = global_scene['HRV'] # Extract reflectance values into xarray.DataArray
         #proj = str(hrv.coords['crs'].values)
         proj = hrv.coords
         return(proj)

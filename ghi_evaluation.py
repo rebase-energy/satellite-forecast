@@ -1,6 +1,6 @@
 '''
 Author: Dennis van der Meer
-Email: dennis.vandermeer@angstrom.uu.se
+Email: denniswillemvandermeer@gmail.com
 
 This script validates instantaneous GHI derived from the satellite against
 GHI data at 14 locations across Sweden, measured by SMHI.
@@ -77,11 +77,11 @@ longitudes['Vaxjo'] = 14.7305
 longitudes['Hoburg'] = 18.1507
 longitudes['Lund'] = 13.2124
 
-RESULTS_PATH = r"C:\Users\denva787\Documents\dennis\Greenlytics\Results"
-SAT_GHI_PATH = r"C:\Users\denva787\Documents\dennis\Greenlytics\Results\satDerivedGHI"
-DATA_PATH = r"C:\Users\denva787\Documents\dennis\Greenlytics\Data"
-UNTARRED_DATA_PATH = r"D:\EUMETSAT\untarred"
-REFLECTANCE_DATA_PATH = r"D:\EUMETSAT\reflectance"
+RESULTS_PATH = r"C:\Users\denva787\Documents\dennis\Greenlytics\Results\ghi_not_resampled"
+#SAT_GHI_PATH = r"C:\Users\denva787\Documents\dennis\Greenlytics\Results\satDerivedGHI"
+#DATA_PATH = r"C:\Users\denva787\Documents\dennis\Greenlytics\Data"
+#UNTARRED_DATA_PATH = r"D:\EUMETSAT\untarred"
+#REFLECTANCE_DATA_PATH = r"D:\EUMETSAT\reflectance"
 
 #skies = ['all']#['clear','cloudy','all']
 #elevations = [10]#[40, 5] # Reflect an zenith angle of 50 and 85 respectively
@@ -134,11 +134,11 @@ rrmse_wide = rrmse_wide.loc[latitudes.keys()]
 rho_wide = res.pivot_table(index="Location",columns='Window',values='$\\rho$')
 rho_wide = rho_wide.loc[latitudes.keys()]
 
-#print(mbe_wide.to_latex(index=True,longtable=False,sparsify=True,escape=False))
-#print(rmbe_wide.to_latex(index=True,longtable=False,sparsify=True,escape=False))
+print(mbe_wide.to_latex(index=True,longtable=False,sparsify=True,escape=False))
+print(rmbe_wide.to_latex(index=True,longtable=False,sparsify=True,escape=False))
 #print(rmse_wide.to_latex(index=True,longtable=False,sparsify=True,escape=False))
 #print(rrmse_wide.to_latex(index=True,longtable=False,sparsify=True,escape=False))
-print(rho_wide.to_latex(index=True,longtable=False,sparsify=True,escape=False))
+#print(rho_wide.to_latex(index=True,longtable=False,sparsify=True,escape=False))
 #res.to_csv(os.path.join(RESULTS_PATH,'test.txt'), header=True, sep='\t', index=False)
 
 

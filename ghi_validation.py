@@ -1,3 +1,12 @@
+'''
+Author: Dennis van der Meer
+Email: denniswillemvandermeer@gmail.com
+
+This script computes the instantaneous GHI over a specific period, using the functions
+in functions.py. The second part of the script loops over training window lengths
+to find out what window produces the most accurate results.
+
+'''
 import pandas as pd
 import time
 import pvlib
@@ -30,6 +39,7 @@ warnings.filterwarnings('ignore')
 
 UNTARRED_DATA_PATH = r"D:\EUMETSAT\untarred"
 RESULTS_PATH = r"C:\Users\denva787\Documents\dennis\Greenlytics\Results"
+RESULTS_PATH = r"C:\Users\denva787\Documents\dennis\Greenlytics\Results\ghi_not_resampled" # For test case where I don't resample
 DATA_PATH = r"C:\Users\denva787\Documents\dennis\Greenlytics\Data" # For ghi measurements
 
 # Create dictionaries with latitudes and longitudes
@@ -89,7 +99,8 @@ if __name__ == '__main__':
     df.to_csv(os.path.join(RESULTS_PATH,"GHI.txt"), sep="\t", header=True, index=True, float_format='%.3f')
     print("--- %s seconds ---" % (time.time() - start_time))
 '''
-wndws = [5,10,15,20,25,30] # Training window lengths 
+
+wndws = [5,10,15,20,25,30] # Training window lengths
 if __name__ == '__main__':
     for wndw in wndws:
         start_time = time.time()
@@ -106,3 +117,9 @@ if __name__ == '__main__':
         filename = "GHI_"+str(wndw)+".txt"
         df.to_csv(os.path.join(RESULTS_PATH,filename), sep="\t", header=True, index=True, float_format='%.3f')
         print("--- %s seconds ---" % (time.time() - start_time))
+'''
+if __name__ == '__main__':
+    wndw = 20
+    start_date = pd.to_datetime("2019-05-01 12:12:00") # Because sat imgs are taken at 12, 27, 42 and 57.
+    fn.calc_historical_rho(start_date,wndw)
+'''

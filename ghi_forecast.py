@@ -1,3 +1,12 @@
+'''
+Author: Dennis van der Meer
+Email: denniswillemvandermeer@gmail.com
+
+This script generates GHI forecasts over a specific period, using the functions
+in functions.py. The second part of the script loops over training window lengths
+to find out what window produces the most accurate results.
+
+'''
 import pandas as pd
 import time
 import numpy as np
@@ -16,11 +25,12 @@ if __name__ == '__main__':
     window = 15
     K=np.arange(1,25,1) # Forecast horizons
     start_date = pd.to_datetime("2019-03-01 06:12:00") # Because sat imgs are taken at 12, 27, 42 and 57.
-    end_date = pd.to_datetime("2019-03-01 23:12:00")#"2019-10-31 23:12:00"
+    end_date = pd.to_datetime("2019-10-31 23:12:00")
     period = pd.date_range(start=start_date,end=end_date,freq='15min')
     pbar = tqdm(total=len(period))
     pool = mp.Pool(processes=32)
-    my_res = [pool.apply_async(fn.fc_ghi, args=(issue_time,fn.latitudes,fn.longitudes,window,K), callback=update) for issue_time in period]
+    #my_res = [pool.apply_async(fn.fc_ghi, args=(issue_time,fn.latitudes,fn.longitudes,window,K), callback=update) for issue_time in period]
+    my_res = [pool.apply_async(fn.fc_ghi_ps, args=(issue_time,fn.latitudes,fn.longitudes,window,K), callback=update) for issue_time in period]
     my_res = [p.get() for p in my_res]
     pool.close()
     print("--- %s seconds ---" % (time.time() - start_time))
